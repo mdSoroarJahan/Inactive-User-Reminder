@@ -1,59 +1,91 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Inactive User Reminder (Laravel)
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+This Laravel app detects users who are inactive (no login for N days) and dispatches a queued job to simulate sending them a reminder. Each reminder is recorded in the database to ensure a user is not processed more than once per day.
 
-## About Laravel
+## Requirements implemented
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- Inactive if not logged in for **7 days** (configurable)
+- A scheduled command runs daily and finds inactive users
+- Dispatches a queued job per user
+- The job simulates sending a reminder (logs) and records `sent_at`
+- Prevents processing the same user more than once per day
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Setup
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+1) Install dependencies
 
-## Learning Laravel
+```bash
+composer install
+```
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+2) Create environment file
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+```bash
+copy .env.example .env
+php artisan key:generate
+```
 
-## Laravel Sponsors
+3) Configure MySQL in `.env`
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+Set at least:
 
-### Premium Partners
+```dotenv
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=inactive_user_reminder
+DB_USERNAME=root
+DB_PASSWORD=
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+# Inactivity window (days)
+REMINDER_INACTIVE_DAYS=7
+```
 
-## Contributing
+4) Run migrations
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```bash
+php artisan migrate
+```
 
-## Code of Conduct
+## How it works
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+- Login tracking: on successful login, the app updates `users.last_login_at`.
+- The scheduled command `app:check-inactive-users`:
+	- selects users inactive for `REMINDER_INACTIVE_DAYS`
+	- skips users already reminded today (based on `reminder_logs`)
+	- dispatches `SendInactiveUserReminder` jobs
+- The job writes a row into `reminder_logs` with `sent_at` and logs a message.
 
-## Security Vulnerabilities
+## Run the scheduler
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+Laravel's scheduler needs a system cron/task to call it.
 
-## License
+### Option A: Dev mode (recommended locally)
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+```bash
+php artisan schedule:work
+```
+
+### Option B: Cron / Task Scheduler
+
+Run every minute:
+
+```bash
+php artisan schedule:run
+```
+
+On Windows you can set up **Task Scheduler** to run the above command every minute.
+
+## Run the queue worker
+
+This project uses the database queue (`QUEUE_CONNECTION=database`).
+
+```bash
+php artisan queue:work
+```
+
+## Run the command manually
+
+```bash
+php artisan app:check-inactive-users
+```
