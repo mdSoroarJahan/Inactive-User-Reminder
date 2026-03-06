@@ -57,6 +57,20 @@ Create the database in MySQL (example):
 CREATE DATABASE inactive_user_reminder;
 ```
 
+#### Create the database using XAMPP (phpMyAdmin)
+
+If you're using XAMPP on Windows:
+
+1) Open **XAMPP Control Panel** and start:
+	- **Apache**
+	- **MySQL**
+2) Open phpMyAdmin in your browser:
+	- http://localhost/phpmyadmin
+3) Click **New** (left sidebar)
+4) Database name: `inactive_user_reminder`
+5) Choose collation (recommended): `utf8mb4_unicode_ci`
+6) Click **Create**
+
 4) Run migrations
 
 ```bash
