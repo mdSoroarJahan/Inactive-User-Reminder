@@ -2,6 +2,10 @@
 
 This Laravel app detects users who are inactive (no login for N days) and dispatches a queued job to simulate sending them a reminder. Each reminder is recorded in the database to ensure a user is not processed more than once per day.
 
+The “reminder send” is simulated by:
+- writing a row to the `reminder_logs` table
+- writing a log entry to `storage/logs/laravel.log`
+
 ## Requirements implemented
 
 - Inactive if not logged in for **7 days** (configurable)
@@ -11,6 +15,12 @@ This Laravel app detects users who are inactive (no login for N days) and dispat
 - Prevents processing the same user more than once per day
 
 ## Setup
+
+### Prerequisites
+
+- PHP 8.2+
+- Composer
+- MySQL / MariaDB
 
 1) Install dependencies
 
@@ -41,10 +51,22 @@ DB_PASSWORD=
 REMINDER_INACTIVE_DAYS=7
 ```
 
+Create the database in MySQL (example):
+
+```sql
+CREATE DATABASE inactive_user_reminder;
+```
+
 4) Run migrations
 
 ```bash
 php artisan migrate
+```
+
+### Optional (run the app)
+
+```bash
+php artisan serve
 ```
 
 ## How it works
@@ -55,6 +77,65 @@ php artisan migrate
 	- skips users already reminded today (based on `reminder_logs`)
 	- dispatches `SendInactiveUserReminder` jobs
 - The job writes a row into `reminder_logs` with `sent_at` and logs a message.
+
+## Verify it works (end-to-end)
+
+This section is designed for reviewers who are not familiar with Laravel.
+
+1) Start the queue worker (leave it running)
+
+```bash
+php artisan queue:work
+```
+
+2) Create an “inactive” user (8 days ago)
+
+```bash
+php artisan tinker
+```
+
+Then paste:
+
+```php
+$u = App\Models\User::factory()->create();
+$u->forceFill(['last_login_at' => now()->subDays(8)])->save();
+```
+
+Exit tinker:
+
+```php
+exit
+```
+
+3) Run the inactive-user command
+
+```bash
+php artisan app:check-inactive-users -v
+```
+
+Expected:
+- it prints something like `Dispatched reminders: 1`
+- the queue worker processes `App\Jobs\SendInactiveUserReminder`
+
+4) Confirm the reminder was recorded
+
+```bash
+php artisan tinker --execute 'dump(App\Models\ReminderLog::count());'
+```
+
+Also check the log file:
+- `storage/logs/laravel.log`
+
+5) Confirm “not more than once per day”
+
+Run the command again the same day:
+
+```bash
+php artisan app:check-inactive-users -v
+```
+
+Expected:
+- `Dispatched reminders: 0`
 
 ## Run the scheduler
 
